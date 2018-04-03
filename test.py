@@ -16,33 +16,52 @@ def sampleUID(cycles, n_samples):
     
     return np.array(maintain, dtype=np.int32) 
 
-def sample_mutation_list(cycles, bases_per_amplicon, error_rate):
-    # list of elements like [n, m, loc] 
-    # means mutation happens in cycle n, mth amplicon and in loc base  
+def get_mutation(samples_id, cycles, bases_per_amplicon, error_rate):
+    n = len(samples_id)
+    mutation_count = np.zeros([n, 2], dtype = np.int16)
 
-    number_of_duplications = np.array([2**(c+1) for c in range(cycles)])
-    possion_means = error_rate * number_of_duplications * bases_per_amplicon
-    n_mutaions = np.random.poisson(possion_means)
+    for i in range(cycles):
+        if i == 0:
+            poisson_mean = n * bases_per_amplicon * error_rate
+            total_count = np.random.poisson(poisson_mean)
+            print(poisson_mean, total_count)
+            if total_count == 0: continue
+            mutated_order = np.random.randint(n, size = (total_count,))
+            for t in mutated_order:
+                if samples_id[t] % 2 == 0:
+                    mutation_count[t, 1] += 1
+                else:
+                    mutation_count[t, 0] += 1
+        
+        else:
+            denominator = 2 ** (i-1)
+            ancestors_to_kids = {}
+            
+            for id in samples_id:
+                prev_ancestor = id / denominator
+                ancestor = prev_ancestor / 2
+                if (ancestor + prev_ancestor) % 2 == 0:
+                    continue
+                else:
+                    if ancestor in ancestors_to_kids.keys():
+                        ancestors_to_kids[ancestor].append(id)
+                    else:
+                        ancestors_to_kids[ancestor] = [id]
 
-    mutations = [[c+1, np.random.randint(2**(c+1)), np.random.randint(33)] for c in range(cycles) for mut in range(n_mutaions[c])]
+            keys = ancestors_to_kids.keys()
+            n_ancestors = len(keys) 
+            poisson_mean = n_ancestors * bases_per_amplicon * error_rate
+            total_count = np.random.poisson(poisson_mean)
+            print(poisson_mean, total_count)
+            if total_count == 0: continue
+            mutated_order = np.random.randint(n_ancestors, size=(total_count,))
+            for o in mutated_order:
+                mutated_id = ancestors_to_kids[ keys[o] ]
+                order = np.where(samples_id == mutated_id)[0][0]
+                mutation_count[order, 0] += 1 
+                mutation_count[order, 1] += 1
 
-    return mutations
-
-def influence_bond(location, current_cycles, total_cycles):
-    # current_cycles < total_cycles
-    next_influence = 2 * location + (location % 2 == 0)
-    lower_bound = next_influence
-    higher_bound = next_influence
-    for i in range(total_cycles - current_cycles - 1):
-        lower_bound *= 2
-        higher_bound = higher_bound * 2 + 1
-    return [lower_bound, higher_bound]
-
-def within(value, bond):
-    if value <= bond[1] and value >= bond[0]:
-        return 1
-    else:
-        return 0
+    return mutation_count
 
 if __name__ == '__main__':
     UID_cycles = 30
@@ -54,21 +73,12 @@ if __name__ == '__main__':
 
     is_mutated = 0
 
-    SampleIDs = sampleUID(UID_cycles, first_dilution_to)
-    mutation_list = sample_mutation_list(UID_cycles, bases_per_amplicon, error_rate)
-
-    count = 0
-    for id in SampleIDs:
-        for mut in mutation_list:
-            if mut[0] < UID_cycles and within(id, influence_bond(mut[1],mut[0],UID_cycles)):
-                count += 2
-                break
-            else:
-                if mut[0] == UID_cycles and mut[1] == id:
-                    count += 1
-                    break
+    SampleIDs = np.sort(sampleUID(UID_cycles, first_dilution_to))
+    mutation_count = get_mutation(SampleIDs, UID_cycles, bases_per_amplicon, error_rate)
     
-    print(count / (2.0 * first_dilution_to))
+    mutated_uid_rate = np.sum(mutation_count > 0) / (2.0 * first_dilution_to)
+    print(mutation_count, np.sum(mutation_count), mutated_uid_rate)
+
     
     
 
