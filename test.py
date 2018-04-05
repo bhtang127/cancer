@@ -128,11 +128,13 @@ def simulation_per_well(well, n_molecules, n_mutated, cycles, dilution_rate, bas
         mutations_count = get_mutation_per_molecule(ids, cycles, bases_per_amplicon, error_rate)
         if UIDs is not None:
             for uid, mutation in zip(UIDs, mutations_count):
-                summary.append( {"UID": uid,
+                summary.append( {"leftUID": uid[0],
+                                 "rightUID": uid[1],
                                  "mutated_before": i < n_mutated,
                                  "molecule_id": i,
                                  "well_id": well,
-                                 "mutation_count": mutation} )
+                                 "left_mutation_count": mutation[0],
+                                 "right_mutation_count": mutation[1]} )
     summary = pd.DataFrame(summary)
     end = time.time()
     print("Well Processing time:", end-start)
