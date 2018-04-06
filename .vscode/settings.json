@@ -1,4 +1,7 @@
 {
     "python.pythonPath": "/usr/bin/python3",
-    "python.linting.enabled": false
+    "python.linting.enabled": false,
+    "files.associations": {
+        "initializer_list": "cpp"
+    }
 }
