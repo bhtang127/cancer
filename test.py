@@ -138,15 +138,4 @@ if __name__ == '__main__':
 
     # print(ancestor_to_kid(np.array([0,1,2,3,4,5,6,7]),0))
     #  x = pd.DataFrame([{"a":1,"b":2},{"a":2,"b":3}])
-    #  y = pd.DataFrame([{"c":1,"d":2},{"c":2,"d":3}])
-
-
-
-
-
-    
-    
-
-
-
-
+#  y = pd.DataFrame([{"c":1,"d":2},{"c":2,"d":3}])
