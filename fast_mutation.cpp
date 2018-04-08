@@ -1,29 +1,24 @@
+#include "fast_mutation.h"
 #include <iostream>
-#include <cstdlib>
-#include <set>
-#include <vector>
-#include <cmath>
-#include <algorithm>
-#include <iterator>
+#include <ctime>
 
-using namespace std;
+std::vector<unsigned int> sampleID(int cycles, int n_samples, std::mt19937& gen){
 
-vector<unsigned int> sampleID(int cycles, int n_samples){
-
-    vector<unsigned int> retval(n_samples);
-    set<unsigned int> samples;
+    std::vector<unsigned int> retval(n_samples);
+    std::set<unsigned int> samples;
+    std::uniform_int_distribution<unsigned int> randi(0, 1<<cycles - 1);
     
     if(n_samples == 1){
-        // cout<<"Here for 1"<<endl;
-        retval[0] = ((unsigned int) rand() % (1 << cycles));
+        // std::cout<<"Here for 1"<<std::endl;
+        retval[0] = randi(gen);
     }
     else{
         samples.clear();
-        // cout << "Here for 2,3" << endl;
+        // std::cout << "Here for 2,3" << std::endl;
         while(samples.size() < n_samples){
-            samples.insert( (unsigned int) rand() % (1 << cycles) );
+            samples.insert( randi(gen) );
         }
-        // cout<<"is here?"<<endl;
+        // std::cout<<"is here?"<<std::endl;
         retval.assign( samples.begin(), samples.end() );
     } 
     return retval;
@@ -76,58 +71,17 @@ unsigned int* translateWBC(unsigned int ID, int cycles){
     }
 } 
 
-vector<unsigned int>* translate(vector< vector<unsigned int> > IDs, int cycles, const char tag){
-    vector<unsigned int>* translation;
-    translation = (vector<unsigned int>*) malloc(2 * sizeof(vector<unsigned int>));
-    vector<unsigned int>::iterator it;
-    unsigned int *ids;
-    if(tag == 'U') {
-        for(int i=0; i < IDs.size(); i++){
-            for(it=IDs[i].begin(); it!=IDs[i].end(); it++){
-                ids = translateUID(*it, cycles);
-                translation[0].push_back(ids[0]);
-                translation[1].push_back(ids[1]);
-            }
-        }
-    }
-    else {
-        for(int i=0; i < IDs.size(); i++){
-            for(it=IDs[i].begin(); it!=IDs[i].end(); it++){
-                ids = translateWBC(*it, cycles);
-                translation[0].push_back(ids[0]);
-                translation[1].push_back(ids[1]);
-            }
-        }
-    }
-    return translation;
+double poisson_pmf(int k, double lambda){
+    return pow(M_E, k * log(lambda) - lambda - lgamma(k + 1.0));
 }
 
-unsigned int factorial(unsigned int n){
- 	unsigned int retval = 1;
- 	for (int i = n; i > 1; --i)
- 		retval *= i;
- 	return retval;
+int random_choice(std::vector<long double> p_val, std::mt19937& gen){
+    std::discrete_distribution<> d(p_val.begin(), p_val.end());
+    return d(gen);
 }
 
-double poisson_pmf(int k, double mu){
-    if(k == 0) return exp(-mu);
-    return exp(-mu) * pow(mu, k) / factorial(k);
-}
-
-int random_choice(vector<long double> p_val){
-    default_random_engine generator;
-    uniform_real_distribution<long double> distribution(0.0,1.0);
-    int choice = 0;
-    long double cumm, p = distribution(generator);
-    distribution.reset();
-    for(cumm=p_val[0]; cumm < p; choice++){
-        cumm += p_val[choice];
-    }
-    return choice;
-}
-
-vector< set<unsigned int> > find_all_ancestors(vector<unsigned int> ids, int cycles){
-    vector< set<unsigned int> > ancestors(cycles);
+std::vector< std::set<unsigned int> > find_all_ancestors(std::vector<unsigned int> ids, int cycles){
+    std::vector< std::set<unsigned int> > ancestors(cycles);
     for(int i=0; i<cycles; i++){
         for(int j=0; j<ids.size(); j++){
             ancestors[i].insert((unsigned int) (ids[j] / (1<<i)));
@@ -136,54 +90,64 @@ vector< set<unsigned int> > find_all_ancestors(vector<unsigned int> ids, int cyc
     return ancestors;
 }
 
-vector< vector<unsigned int> > cpp_poisson_mutation(vector<int> nsamples_per_molecule, int cycles, 
-                                                int bases_per_amplicon, double error_rate, const char tag){
+void inplace_poisson_mutation(unsigned int* retval, int rows, int columns,
+                              unsigned int* nsamples_per_molecule, int n_molecule, int cycles, 
+                              int bases_per_amplicon, double error_rate){
+    
+    unsigned int aid1, aid2, *ID, ns_max = 0;
+    for(int i=0; i < n_molecule; ++i){
+        if(nsamples_per_molecule[i] > ns_max){
+            ns_max = nsamples_per_molecule[i];
+        }
+    }
 
-    int n_molecule = nsamples_per_molecule.size();
-    unsigned int aid1, aid2, *ID, ns_max;
-    ns_max = *max_element(nsamples_per_molecule.begin(), nsamples_per_molecule.end());
+    int total_mutation_counts = 0;
     double control_mean = ns_max * (cycles-floor(log2(ns_max))+2) * bases_per_amplicon * error_rate;
     double true_mean;
     int cut_off = 0, ns, randnum, choice, aux, *mutation_count, layer, index;
     double zero_control_mean;
     long double psum;
-    vector<long double> control_pval(2), choice_pval, poisson_pval, adjust_pval;
-    vector<unsigned int> layers, aids, state;
-    vector<unsigned int>::iterator it;
-    set<unsigned int>::iterator st;
+    std::vector<long double> control_pval(2), choice_pval, poisson_pval, adjust_pval;
+    std::vector<unsigned int> layers, aids, state;
+    std::vector<unsigned int>::iterator it;
+    std::set<unsigned int>::iterator st;
+
+    std::cout<<"control_mean: "<<control_mean<<std::endl;
 
     int sum=0, ancsum=0;
     for(int i=0; i < n_molecule; i++) sum += nsamples_per_molecule[i];
-    vector< vector<unsigned int> > retval(sum), mutation_loc, mutation_loc_aux;
-    vector<unsigned int> ids;
-    vector< set<unsigned int> > ancestors;
-
-    while( n_molecule * poisson_pmf(cut_off, control_mean) > 1e-5 ) ++cut_off;
-    cut_off = max(cut_off, 2);
-    cout<<"cut_off: "<<cut_off<<" iteration: "<<n_molecule<<endl;
+    std::vector< std::vector<unsigned int> > mutation_loc, mutation_loc_aux;
+    std::vector<unsigned int> ids;
+    std::vector< std::set<unsigned int> > ancestors;
     
-    if(tag == 'U'){
+    while( n_molecule * poisson_pmf(cut_off, control_mean) > 1e-5 ) ++cut_off;
+    cut_off = std::max(cut_off, 2);
+    std::cout<<"cut_off: "<<cut_off<<" iteration: "<<n_molecule<<std::endl;
+    
+    std::random_device rd;
+    std::mt19937 mt(rd());
+    srand( time(NULL) );
+
+    if(columns == 4){
         for(int i=0,loc=0; i<n_molecule; i++){
             ns = nsamples_per_molecule[i];
             if(i % (n_molecule/10) == 0){
-                cout<<"Processing: "<<i*100.0/n_molecule<<"%"<<endl;
+                std::cout<<"Processing: "<<i*100.0/n_molecule<<"%"<<std::endl;
             }
             zero_control_mean = ns * (cycles-floor(log2(ns))+2) * bases_per_amplicon * error_rate;
             control_pval[0] = poisson_pmf(0, zero_control_mean); 
             control_pval[1] = 1 - control_pval[0];
-            if(random_choice(control_pval) == 0){
-                ids = sampleID(cycles, ns);
+            if(random_choice(control_pval, mt) == 0){
+                ids = sampleID(cycles, ns, mt);
                 for(int j=0; j<ids.size(); j++){
                     ID = translateUID( ids[j], cycles );
-                    retval[loc].push_back(ID[0]);
-                    retval[loc].push_back(ID[1]);
-                    retval[loc].push_back(0);
-                    retval[loc].push_back(0);
+                    retval[columns * loc] = ID[0];
+                    retval[columns * loc + 1] = ID[1];
                     loc++;       
                 }
             }
             else{
-                ids = sampleID(cycles, ns);
+                ids = sampleID(cycles, ns, mt);
                 ancestors = find_all_ancestors(ids, cycles);
                 ancsum = 0;
                 for(int k=0; k < ancestors.size(); k++){
@@ -205,18 +169,24 @@ vector< vector<unsigned int> > cpp_poisson_mutation(vector<int> nsamples_per_mol
                     adjust_pval.push_back(poisson_pval[k] / control_pval[1]);
                 }
 
-                randnum = random_choice(adjust_pval);
+                // for(int k=0; k < adjust_pval.size(); k++){
+                //     std::cout << adjust_pval[k] << " ";
+                // }
+                // std::cout << std::endl;
+
+                randnum = random_choice(adjust_pval, mt);
                 if(randnum == 0){
                     for(int j=0; j<ids.size(); j++){
                         ID = translateUID( ids[j], cycles );
-                        retval[loc].push_back(ID[0]);
-                        retval[loc].push_back(ID[1]);
-                        retval[loc].push_back(0);
-                        retval[loc].push_back(0);
+                        retval[columns * loc] = ID[0];
+                        retval[columns * loc + 1] = ID[1];
                         loc++;       
                     }
                 }
                 else{
+                    total_mutation_counts += randnum;
+                    // std::cout<<i<<" ";
+                    // if(randnum > 1) std::cout<<"here a multiple mutations of "<<randnum<<" at iteration "<<i<<std::endl;
                     choice_pval.clear();
                     for(int k=0; k < ancestors.size(); k++){
                         choice_pval.push_back(ancestors[k].size() / (long double) ancsum);
@@ -224,7 +194,7 @@ vector< vector<unsigned int> > cpp_poisson_mutation(vector<int> nsamples_per_mol
                     layers.clear();
                     aids.clear();
                     for(int k=0; k < randnum; k++){
-                        choice = random_choice(choice_pval);
+                        choice = random_choice(choice_pval, mt);
                         layers.push_back(choice);
                         aux = rand() % ancestors[choice].size();
                         st = ancestors[choice].begin();
@@ -291,11 +261,11 @@ vector< vector<unsigned int> > cpp_poisson_mutation(vector<int> nsamples_per_mol
                         if(mutation_loc[k].size() == 0) continue;
                         else{
                             if(mutation_loc[k][2] == 1){
-                                index = distance(ids.begin(), find(ids.begin(), ids.end(), mutation_loc[k][0]));
+                                index = distance(ids.begin(), std::find(ids.begin(), ids.end(), mutation_loc[k][0]));
                                 mutation_count[2 * index + (mutation_loc[k][0] % 2 == 0)] += 1;
                             }
                             else{
-                                index = distance(ids.begin(), find(ids.begin(), ids.end(), mutation_loc[k][0]));
+                                index = distance(ids.begin(), std::find(ids.begin(), ids.end(), mutation_loc[k][0]));
                                 mutation_count[2 * index] += 1;
                                 mutation_count[2 * index + 1] += 1;                                                                
                             }
@@ -303,10 +273,10 @@ vector< vector<unsigned int> > cpp_poisson_mutation(vector<int> nsamples_per_mol
                     }
                     for(int k=0; k < ns; k++){
                         ID = translateUID( ids[k], cycles );
-                        retval[loc].push_back(ID[0]);
-                        retval[loc].push_back(ID[1]);
-                        retval[loc].push_back(mutation_count[2 * k]);
-                        retval[loc].push_back(mutation_count[2 * k + 1]);
+                        retval[columns * loc] = ID[0];
+                        retval[columns * loc + 1] = ID[1];
+                        retval[columns * loc + 2] += mutation_count[2 * k];
+                        retval[columns * loc + 3] += mutation_count[2 * k + 1];
                         loc++;
                     }
                     free(mutation_count);
@@ -318,25 +288,24 @@ vector< vector<unsigned int> > cpp_poisson_mutation(vector<int> nsamples_per_mol
         for(int i=0,loc=0; i < n_molecule; i++){
             ns = nsamples_per_molecule[i];
             if(i % (n_molecule/10) == 0){
-                cout<<"Processing: "<<i*100.0/n_molecule<<"%"<<endl;
+                std::cout<<"Processing: "<<i*100.0/n_molecule<<"%"<<std::endl;
             }
             zero_control_mean = ns * (cycles-floor(log2(ns))+2) * bases_per_amplicon * error_rate;
             control_pval[0] = poisson_pmf(0, zero_control_mean); 
             control_pval[1] = 1 - control_pval[0];
-            if(random_choice(control_pval) == 0){
-                ids = sampleID(cycles, ns);
+            // std::cout<<"Here"<<std::endl;
+            if(random_choice(control_pval, mt) == 0){
+                ids = sampleID(cycles, ns, mt);
                 for(int j=0; j < ids.size(); j++){
                     ID = translateWBC( ids[j], cycles );
-                    retval[loc].push_back(ID[0]);
-                    retval[loc].push_back(ID[1]);
-                    retval[loc].push_back( ids[j] < (1<<(cycles-1)) );
-                    retval[loc].push_back(0);
-                    retval[loc].push_back(0);
+                    retval[columns * loc] = ID[0];
+                    retval[columns * loc + 1] = ID[1];
+                    retval[columns * loc + 2] = ( ids[j] < (1<<(cycles-1)) );
                     loc++;       
                 }
-            }
+            }            
             else{
-                ids = sampleID(cycles, ns);
+                ids = sampleID(cycles, ns, mt);
                 ancestors = find_all_ancestors(ids, cycles);
                 ancsum = 0;
                 for(int k=0; k < ancestors.size(); k++){
@@ -358,19 +327,19 @@ vector< vector<unsigned int> > cpp_poisson_mutation(vector<int> nsamples_per_mol
                     adjust_pval.push_back(poisson_pval[k] / control_pval[1]);
                 }
 
-                randnum = random_choice(adjust_pval);
+                randnum = random_choice(adjust_pval, mt);
                 if(randnum == 0){
                     for(int j=0; j<ids.size(); j++){
                         ID = translateWBC( ids[j], cycles );
-                        retval[loc].push_back(ID[0]);
-                        retval[loc].push_back(ID[1]);
-                        retval[loc].push_back( ids[j] < (1<<(cycles-1)) );                        
-                        retval[loc].push_back(0);
-                        retval[loc].push_back(0);
+                        retval[columns * loc] = ID[0];
+                        retval[columns * loc + 1] = ID[1];
+                        retval[columns * loc + 2] = ( ids[j] < (1<<(cycles-1)) );                       
                         loc++;       
                     }
                 }
                 else{
+                    total_mutation_counts += randnum;
+
                     choice_pval.clear();
                     for(int k=0; k < ancestors.size(); k++){
                         choice_pval.push_back(ancestors[k].size() / (long double) ancsum);
@@ -378,7 +347,7 @@ vector< vector<unsigned int> > cpp_poisson_mutation(vector<int> nsamples_per_mol
                     layers.clear();
                     aids.clear();
                     for(int k=0; k < randnum; k++){
-                        choice = random_choice(choice_pval);
+                        choice = random_choice(choice_pval, mt);
                         layers.push_back(choice);
                         aux = rand() % ancestors[choice].size();
                         st = ancestors[choice].begin();
@@ -441,16 +410,15 @@ vector< vector<unsigned int> > cpp_poisson_mutation(vector<int> nsamples_per_mol
                         }
                         mutation_loc = mutation_loc_aux;
                     }
-                    cout<<"Aggregate"<<endl;
                     for(int k=0; k < mutation_loc.size(); k++){
                         if(mutation_loc[k].size() == 0) continue;
                         else{
                             if(mutation_loc[k][2] == 1){
-                                index = distance(ids.begin(), find(ids.begin(), ids.end(), mutation_loc[k][0]));
+                                index = distance(ids.begin(), std::find(ids.begin(), ids.end(), mutation_loc[k][0]));
                                 mutation_count[2 * index + (mutation_loc[k][0] % 2 == 0)] += 1;
                             }
                             else{
-                                index = distance(ids.begin(), find(ids.begin(), ids.end(), mutation_loc[k][0]));
+                                index = distance(ids.begin(), std::find(ids.begin(), ids.end(), mutation_loc[k][0]));
                                 mutation_count[2 * index] += 1;
                                 mutation_count[2 * index + 1] += 1;                                                                
                             }
@@ -458,11 +426,11 @@ vector< vector<unsigned int> > cpp_poisson_mutation(vector<int> nsamples_per_mol
                     }
                     for(int k=0; k < ns; k++){
                         ID = translateWBC( ids[k], cycles );
-                        retval[loc].push_back(ID[0]);
-                        retval[loc].push_back(ID[1]);
-                        retval[loc].push_back( ids[k] < (1<<(cycles-1)) );                                                
-                        retval[loc].push_back(mutation_count[2 * k]);
-                        retval[loc].push_back(mutation_count[2 * k + 1]);
+                        retval[columns * loc] = ID[0];
+                        retval[columns * loc + 1] = ID[1];
+                        retval[columns * loc + 2] = ( ids[k] < (1<<(cycles-1)) );                                                
+                        retval[columns * loc + 3] += mutation_count[2 * k];
+                        retval[columns * loc + 4] += mutation_count[2 * k + 1];
                         loc++;
                     }
                     free(mutation_count);
@@ -470,36 +438,44 @@ vector< vector<unsigned int> > cpp_poisson_mutation(vector<int> nsamples_per_mol
             }
         }
     }
-
-    return retval;
+    std::cout<<"total mutation count: "<<total_mutation_counts<<std::endl;
+    return;
 }
 
-vector<int> expand(vector<int> n_samples){
-    vector<int> indexes;
-    for(int i=0; i < n_samples.size(); ++i){
+void inplace_expand(int* indexes, int olen, int* n_samples, int ilen){
+    for(int i=0, j=0; i < ilen; ++i){
         if(n_samples[i] > 0){
-            for(int j=0; j < n_samples[i]; ++j){
-            indexes.push_back(i);
+            for(int k=0; k < n_samples[i]; ++k, ++j){
+                indexes[j] = i;
             }
         }
     }
-    return indexes;
+    return;
 }
 
 
-
 int main(){
-    int c = 30, iter = 1000000, s=1;
-    vector< vector<unsigned int> > l;
-    vector<int> ns;
-    vector<unsigned int> ws(2);
-    set<int> ss;
-    set<int>::iterator st;
-    vector< vector<unsigned int> > res;
-    for(int i=0; i < iter; i++){
-        ns.push_back((int) 1 + rand()%3);
+    int c = 30, iter = 10000, iter2=20000000, s=1;
+    std::vector< std::vector<unsigned int> > l;
+    std::vector<unsigned int> ns, ns2;
+    std::vector<unsigned int> ws(2);
+    std::set<int> ss;
+    std::set<int>::iterator st;
+    std::vector< std::vector<unsigned int> > res;
+    int sum = 0, sum1 = 0,  r;
+    unsigned int *retval;
+    for(int i=0; i < iter2; i++){
+        r = (int) 1 + rand()%3;
+        ns.push_back(r);
+        sum += r;
     }
-    res = cpp_poisson_mutation(ns,30,33,1e-6,'U');
-    cout<< res.size() << " " << res[0].size() << endl;
+    for(int i=0; i < iter; i++){
+        ns2.push_back(2000);
+        sum1 += r;
+    }
+    retval = (unsigned int*)malloc( sum1 * 4 * sizeof(unsigned int) );
+    inplace_poisson_mutation(retval, sum, 4, &ns2[0], iter, 30,33,1e-6);
+    retval = (unsigned int*)malloc( sum * 5 * sizeof(unsigned int) );
+    inplace_poisson_mutation(retval, sum, 5, &ns[0], iter2, 30,33,1e-6);
     return 0;
 }

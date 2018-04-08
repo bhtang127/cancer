@@ -4,6 +4,31 @@
     "files.associations": {
         "initializer_list": "cpp",
         "cmath": "cpp",
-        "utility": "cpp"
-    }
+        "utility": "cpp",
+        "vector": "cpp",
+        "algorithm": "cpp",
+        "iterator": "cpp",
+        "*.tcc": "cpp",
+        "system_error": "cpp",
+        "iostream": "cpp",
+        "ctime": "cpp",
+        "ostream": "cpp",
+        "cctype": "cpp",
+        "clocale": "cpp",
+        "cstdint": "cpp",
+        "cstdio": "cpp",
+        "cstdlib": "cpp",
+        "cwchar": "cpp",
+        "cwctype": "cpp",
+        "exception": "cpp",
+        "iosfwd": "cpp",
+        "istream": "cpp",
+        "limits": "cpp",
+        "new": "cpp",
+        "stdexcept": "cpp",
+        "streambuf": "cpp",
+        "type_traits": "cpp",
+        "typeinfo": "cpp"
+    },
+    "C_Cpp.errorSquiggles": "Disabled"
 }
