@@ -2,28 +2,6 @@
 #include <iostream>
 #include <ctime>
 
-std::vector<unsigned int> sampleID(int cycles, int n_samples, std::mt19937& gen){
-
-    std::vector<unsigned int> retval(n_samples);
-    std::set<unsigned int> samples;
-    std::uniform_int_distribution<unsigned int> randi(0, 1<<cycles - 1);
-    
-    if(n_samples == 1){
-        // std::cout<<"Here for 1"<<std::endl;
-        retval[0] = randi(gen);
-    }
-    else{
-        samples.clear();
-        // std::cout << "Here for 2,3" << std::endl;
-        while(samples.size() < n_samples){
-            samples.insert( randi(gen) );
-        }
-        // std::cout<<"is here?"<<std::endl;
-        retval.assign( samples.begin(), samples.end() );
-    } 
-    return retval;
-}
-
 unsigned int* translateUID(unsigned int ID, int cycles){
     unsigned int* UIDs;
     unsigned int uid1, uid2;
@@ -75,9 +53,12 @@ double poisson_pmf(int k, double lambda){
     return pow(M_E, k * log(lambda) - lambda - lgamma(k + 1.0));
 }
 
-int random_choice(std::vector<long double> p_val, std::mt19937& gen){
-    std::discrete_distribution<> d(p_val.begin(), p_val.end());
-    return d(gen);
+int random_choice(std::vector<long double> p_val, long double r){
+    long double cumm = p_val[0];
+    int i=0;
+    for(; cumm < r;)
+        cumm += p_val[++i];
+    return i;
 }
 
 std::vector< std::set<unsigned int> > find_all_ancestors(std::vector<unsigned int> ids, int cycles){
@@ -93,7 +74,8 @@ std::vector< std::set<unsigned int> > find_all_ancestors(std::vector<unsigned in
 void inplace_poisson_mutation(unsigned int* retval, int rows, int columns,
                               unsigned int* nsamples_per_molecule, int n_molecule, int cycles, 
                               int bases_per_amplicon, double error_rate){
-    
+
+
     unsigned int aid1, aid2, *ID, ns_max = 0;
     for(int i=0; i < n_molecule; ++i){
         if(nsamples_per_molecule[i] > ns_max){
@@ -109,9 +91,11 @@ void inplace_poisson_mutation(unsigned int* retval, int rows, int columns,
     long double psum;
     std::vector<long double> control_pval(2), choice_pval, poisson_pval, adjust_pval;
     std::vector<unsigned int> layers, aids, state;
+    std::set<unsigned int> idset;
     std::vector<unsigned int>::iterator it;
     std::set<unsigned int>::iterator st;
 
+    std::cout<<"New_version: "<<std::endl;
     std::cout<<"control_mean: "<<control_mean<<std::endl;
 
     int sum=0, ancsum=0;
@@ -126,6 +110,8 @@ void inplace_poisson_mutation(unsigned int* retval, int rows, int columns,
     
     std::random_device rd;
     std::mt19937 mt(rd());
+    std::uniform_int_distribution<unsigned long> dist(0, 1<<cycles - 1);
+    std::uniform_real_distribution<long double> rdist(0, 1);
     srand( time(NULL) );
 
     if(columns == 4){
@@ -137,8 +123,12 @@ void inplace_poisson_mutation(unsigned int* retval, int rows, int columns,
             zero_control_mean = ns * (cycles-floor(log2(ns))+2) * bases_per_amplicon * error_rate;
             control_pval[0] = poisson_pmf(0, zero_control_mean); 
             control_pval[1] = 1 - control_pval[0];
-            if(random_choice(control_pval, mt) == 0){
-                ids = sampleID(cycles, ns, mt);
+            if(random_choice(control_pval, rdist(mt)) == 0){
+                idset.clear(); ids.resize(ns);
+                while(idset.size() < ns){
+                    idset.insert( dist(mt) );
+                }
+                ids.assign(idset.begin(), idset.end());
                 for(int j=0; j<ids.size(); j++){
                     ID = translateUID( ids[j], cycles );
                     retval[columns * loc] = ID[0];
@@ -147,7 +137,11 @@ void inplace_poisson_mutation(unsigned int* retval, int rows, int columns,
                 }
             }
             else{
-                ids = sampleID(cycles, ns, mt);
+                idset.clear(); ids.resize(ns);
+                while(idset.size() < ns){
+                    idset.insert( dist(mt) );
+                }
+                ids.assign(idset.begin(), idset.end());
                 ancestors = find_all_ancestors(ids, cycles);
                 ancsum = 0;
                 for(int k=0; k < ancestors.size(); k++){
@@ -174,7 +168,7 @@ void inplace_poisson_mutation(unsigned int* retval, int rows, int columns,
                 // }
                 // std::cout << std::endl;
 
-                randnum = random_choice(adjust_pval, mt);
+                randnum = random_choice(adjust_pval, rdist(mt));
                 if(randnum == 0){
                     for(int j=0; j<ids.size(); j++){
                         ID = translateUID( ids[j], cycles );
@@ -194,7 +188,7 @@ void inplace_poisson_mutation(unsigned int* retval, int rows, int columns,
                     layers.clear();
                     aids.clear();
                     for(int k=0; k < randnum; k++){
-                        choice = random_choice(choice_pval, mt);
+                        choice = random_choice(choice_pval, rdist(mt));
                         layers.push_back(choice);
                         aux = rand() % ancestors[choice].size();
                         st = ancestors[choice].begin();
@@ -294,8 +288,12 @@ void inplace_poisson_mutation(unsigned int* retval, int rows, int columns,
             control_pval[0] = poisson_pmf(0, zero_control_mean); 
             control_pval[1] = 1 - control_pval[0];
             // std::cout<<"Here"<<std::endl;
-            if(random_choice(control_pval, mt) == 0){
-                ids = sampleID(cycles, ns, mt);
+            if(random_choice(control_pval, rdist(mt)) == 0){
+                idset.clear(); ids.resize(ns);
+                while(idset.size() < ns){
+                    idset.insert( dist(mt) );
+                }
+                ids.assign(idset.begin(), idset.end());
                 for(int j=0; j < ids.size(); j++){
                     ID = translateWBC( ids[j], cycles );
                     retval[columns * loc] = ID[0];
@@ -305,7 +303,11 @@ void inplace_poisson_mutation(unsigned int* retval, int rows, int columns,
                 }
             }            
             else{
-                ids = sampleID(cycles, ns, mt);
+                idset.clear(); ids.resize(ns);
+                while(idset.size() < ns){
+                    idset.insert( dist(mt) );
+                }
+                ids.assign(idset.begin(), idset.end());
                 ancestors = find_all_ancestors(ids, cycles);
                 ancsum = 0;
                 for(int k=0; k < ancestors.size(); k++){
@@ -327,7 +329,7 @@ void inplace_poisson_mutation(unsigned int* retval, int rows, int columns,
                     adjust_pval.push_back(poisson_pval[k] / control_pval[1]);
                 }
 
-                randnum = random_choice(adjust_pval, mt);
+                randnum = random_choice(adjust_pval, rdist(mt));
                 if(randnum == 0){
                     for(int j=0; j<ids.size(); j++){
                         ID = translateWBC( ids[j], cycles );
@@ -347,7 +349,7 @@ void inplace_poisson_mutation(unsigned int* retval, int rows, int columns,
                     layers.clear();
                     aids.clear();
                     for(int k=0; k < randnum; k++){
-                        choice = random_choice(choice_pval, mt);
+                        choice = random_choice(choice_pval, rdist(mt));
                         layers.push_back(choice);
                         aux = rand() % ancestors[choice].size();
                         st = ancestors[choice].begin();
@@ -471,10 +473,10 @@ int main(){
     }
     for(int i=0; i < iter; i++){
         ns2.push_back(2000);
-        sum1 += r;
+        sum1 += 2000;
     }
     retval = (unsigned int*)malloc( sum1 * 4 * sizeof(unsigned int) );
-    inplace_poisson_mutation(retval, sum, 4, &ns2[0], iter, 30,33,1e-6);
+    inplace_poisson_mutation(retval, sum1, 4, &ns2[0], iter, 30,33,1e-6);
     retval = (unsigned int*)malloc( sum * 5 * sizeof(unsigned int) );
     inplace_poisson_mutation(retval, sum, 5, &ns[0], iter2, 30,33,1e-6);
     return 0;
