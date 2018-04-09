@@ -98,6 +98,10 @@ inplace_poisson_mutation = _fast_mutation.inplace_poisson_mutation
 def inplace_expand(indexes, n_samples):
     return _fast_mutation.inplace_expand(indexes, n_samples)
 inplace_expand = _fast_mutation.inplace_expand
+
+def inplace_sampling(samples, total_samples, restriction):
+    return _fast_mutation.inplace_sampling(samples, total_samples, restriction)
+inplace_sampling = _fast_mutation.inplace_sampling
 # This file is compatible with both classic and new-style classes.
 
 

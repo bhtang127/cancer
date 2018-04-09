@@ -28,7 +28,7 @@ def first_dilution(data, molecule_per_well, well, cycles, dilution_rate, bases_p
     dilution_to = [int(molecule_per_well[i] * 2**cycles * dilution_rate) for i in range(well)]
     nsamples_per_molecule = []
     for i in range(well):
-        nsamples_per_molecule += list(nsamples_generator(np.ones(molecule_per_well[i]), dilution_to[i]))
+        nsamples_per_molecule += list(nsamples_generator(molecule_per_well[i], dilution_to[i]))
     
     indexes = expand(nsamples_per_molecule)
     data_expand = data.iloc[indexes].reset_index(drop=True)
@@ -53,7 +53,7 @@ def second_dilution(data, cycles, sequencer_reads, bases_per_amplicon, error_rat
     start = time.time()
 
     n_amplicon = data.shape[0]
-    nsamples = nsamples_generator(np.ones(n_amplicon), int(sequencer_reads/2), restriction=2**cycles * np.ones(n_amplicon))
+    nsamples = nsamples_generator(n_amplicon, int(sequencer_reads/2), restriction=2**cycles)
     
     well_tag = np.array(data.iloc[np.where(nsamples > 0)[0]]["well_id"])
     indexes = expand(nsamples)
@@ -73,16 +73,16 @@ def second_dilution(data, cycles, sequencer_reads, bases_per_amplicon, error_rat
     return data
 
 if __name__ == '__main__':
-    UID_cycles = 30 #15 #30
+    UID_cycles = 15 #15 #30
     bases_per_amplicon = 33
     error_rate = 1e-6
 
     total_molecule = 30 * 308 
-    mutated_count = 90
-    wells = 94 #6 #94
-    first_dilution_rate = 0.000185*0.01 #0.01 #0.000185*0.01
+    mutated_count = 1
+    wells = 6 #6 #94
+    first_dilution_rate = 0.01 #0.01 #0.000185*0.01
 
-    WBC_cycles = 4 #18 #4
+    WBC_cycles = 18 #18 #4
     sequencer_reads = 50000000
 
     start = time.time()

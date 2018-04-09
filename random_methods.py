@@ -16,23 +16,9 @@ def expand(n_samples):
     return indexes
 
 def nsamples_generator(counts, total_samples, restriction=0):
-    if restriction is 0:
-        pval = np.array(counts) / np.sum(counts)
-        return np.random.multinomial(total_samples, pval)
-    else:
-        pval = np.array(counts) / np.sum(counts)
-        l = len(counts)
-        for a_try in range(20):
-            samples = np.random.multinomial(total_samples, pval)
-            if np.sum(samples > restriction) == 0:
-                return samples
-        n_samples = np.zeros(len(counts), dtype=np.int16)
-        for i in range(total_samples):
-            loc = np.random.choice(l, p=pval)
-            while n_samples[loc] >= restriction[loc]:
-                loc = np.random.choice(l, p=pval)
-            n_samples[loc] += 1
-        return n_samples
+    samples = np.zeros(counts, dtype=np.int32)
+    fm.inplace_sampling(samples, total_samples, restriction)
+    return samples
 
 def poisson_mutation(nsamples_per_molecule, cycles, bases_per_amplicon, error_rate, tag):
     rows = np.sum(nsamples_per_molecule)

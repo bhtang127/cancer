@@ -29,6 +29,6 @@ _fast_mutation = Extension("_fast_mutation",
 setup(  name        = "fast_mutation module",
         description = "a fast version of mutation and expand",
         author      = "Bohao Tang",
-        version     = "0.9",
+        version     = "1.0",
         ext_modules = [_fast_mutation]
         )

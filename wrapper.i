@@ -17,6 +17,7 @@
 %apply (int* INPLACE_ARRAY1, int DIM1) {(int* indexes, int olen)};
 %apply (unsigned int* IN_ARRAY1, int DIM1) {(unsigned int* nsamples_per_molecule, int n_molecule)};
 %apply (unsigned int* INPLACE_ARRAY2, int DIM1, int DIM2) {(unsigned int* retval, int rows, int columns)};
+%apply (int* INPLACE_ARRAY1, int DIM1) {(int* samples, int len)};
 
 %include "fast_mutation.h"
 

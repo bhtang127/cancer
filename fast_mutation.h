@@ -10,3 +10,5 @@ void inplace_poisson_mutation(unsigned int* retval, int rows, int columns,
                               int bases_per_amplicon, double error_rate);
 
 void inplace_expand(int* indexes, int olen, int* n_samples, int ilen);
+
+void inplace_sampling(int* samples, int len, int total_samples, int restriction);
