@@ -132,6 +132,8 @@ if __name__ == '__main__':
     #     names.append( "well_" + str(i) + "_UID_fd" )
     #     names.append( "well_" + str(i) + "_mutation_fd" )
 
-    one_run(UID_cycles,WBC_cycles,total_molecule,mutated_count,wells,first_dilution_rate,sequencer_reads,bases_per_amplicon,error_rate)
+    # one_run(UID_cycles,WBC_cycles,total_molecule,mutated_count,wells,first_dilution_rate,sequencer_reads,bases_per_amplicon,error_rate)
+
+    one_run(15,15,900, 1, 6, 0.01, 5000000, bases_per_amplicon, error_rate)
 
 
