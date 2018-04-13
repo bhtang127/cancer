@@ -8,8 +8,6 @@ from random_methods import *
 
 
 def data_init(molecule_per_well, mutated_per_well):
-    start = time.time()
-
     data = []
     for i, nm in enumerate(molecule_per_well):
         for j in range(nm):
@@ -17,13 +15,10 @@ def data_init(molecule_per_well, mutated_per_well):
                          "molecule_id": j,
                          "mutated_before": j < mutated_per_well[i]})
     data = pd.DataFrame(data)
-
-    end = time.time()
-    print("Data Prepare time:", end-start)
+    print("        Data Initialized")
     return data
 
 def first_dilution(data, molecule_per_well, well, cycles, dilution_rate, bases_per_amplicon, error_rate):
-    start = time.time()
 
     dilution_to = [int(molecule_per_well[i] * 2**cycles * dilution_rate) for i in range(well)]
     nsamples_per_molecule = []
@@ -36,54 +31,37 @@ def first_dilution(data, molecule_per_well, well, cycles, dilution_rate, bases_p
     nsamples_per_molecule = np.array(nsamples_per_molecule, dtype=np.int16)
     nsamples_per_molecule = nsamples_per_molecule[nsamples_per_molecule > 0]
     
-    end = time.time()
-    print("First dilution Prepare time:", end-start)
-    
     mutations = poisson_mutation(nsamples_per_molecule, cycles, bases_per_amplicon, error_rate, tag="UID")
 
     if data_expand.shape[0] != mutations.shape[0]:
         raise(ValueError)
     data = pd.concat([data_expand, mutations], axis=1)
+    # data[:1000].to_csv("data.csv")
 
-    end = time.time()
-    print("First dilution time:", end-start)
+    print("        First dilution done")
     return data
 
 def second_dilution(data, cycles, sequencer_reads, bases_per_amplicon, error_rate):
-    start = time.time()
 
     n_amplicon = data.shape[0]
     nsamples = nsamples_generator(n_amplicon, int(sequencer_reads/2), restriction=2**cycles)
     
-    well_tag = np.array(data.iloc[np.where(nsamples > 0)[0]]["well_id"])
     indexes = expand(nsamples)
     data_expand = data.iloc[indexes].reset_index(drop=True)
     
     nsamples = nsamples[nsamples > 0]
-    end = time.time()
-    print("Second dilution Prepare time:", end-start)
+
     mutations = poisson_mutation(nsamples, cycles, bases_per_amplicon, error_rate, tag="WBC")
 
     if data_expand.shape[0] != mutations.shape[0]:
         raise(ValueError)
     
     data = pd.concat([data_expand, mutations], axis=1)
-    end = time.time()
-    print("Second dilution time:", end-start)
+
+    print("        Second dilution done")
     return data
 
-if __name__ == '__main__':
-    UID_cycles = 15 #15 #30
-    bases_per_amplicon = 33
-    error_rate = 1e-6
-
-    total_molecule = 30 * 308 
-    mutated_count = 1
-    wells = 6 #6 #94
-    first_dilution_rate = 0.01 #0.01 #0.000185*0.01
-
-    WBC_cycles = 18 #18 #4
-    sequencer_reads = 50000000
+def one_run(UID_cycles, WBC_cycles, total_molecule, mutated_count, wells, first_dilution_rate, sequencer_reads, bases_per_amplicon, error_rate):
 
     start = time.time()
 
@@ -101,45 +79,59 @@ if __name__ == '__main__':
             continue
         else:
             mutated_per_well[loc] += 1
-    
-    end = time.time()
-    print("Allocation time:", end-start)
 
     init = data_init(molecule_per_well, mutated_per_well)
 
-    summary_first_dilution = first_dilution(init, molecule_per_well, wells, UID_cycles, 
+    fd_data = first_dilution(init, molecule_per_well, wells, UID_cycles, 
                                             first_dilution_rate, bases_per_amplicon, error_rate)
 
-    summary_first_dilution.to_msgpack('first_dilution2.msg')
-    # summary_first_dilution = pd.read_msgpack("first_dilution.msg")
+    data = second_dilution(fd_data, WBC_cycles, sequencer_reads, bases_per_amplicon, error_rate)
+    # print( np.sum(data["leftUID"] == data["rightUID"]) / data.shape[0] )
+    data[:1000].to_csv("data0.csv")    
 
-    count = 0
-    count += 2 * summary_first_dilution[summary_first_dilution["mutated_before"]==1].shape[0]
-    nmdata = np.asarray(summary_first_dilution[summary_first_dilution["mutated_before"]==0][["UID_left_mutation","UID_right_mutation"]])
-    count += np.sum(nmdata > 0)
+    data["UID"] = data["left_side"] * data["leftUID"] + (1 - data["left_side"]) * data["rightUID"]
 
-    first_dilution_to = int( total_molecule * 2**UID_cycles * first_dilution_rate )
-    print("mutated ratio:", count / (2.0*first_dilution_to))
+    data["left_mutation"] = np.array(data["mutated_before"] | (data["WBC_left_mutation"] > 0) | ((data["left_side"] * data["UID_left_mutation"] + (1 - data["left_side"]) * data["UID_right_mutation"]) > 0), dtype=np.int8)
+    data["right_mutation"] = np.array(data["mutated_before"] | (data["WBC_right_mutation"] > 0) | ((data["left_side"] * data["UID_left_mutation"] + (1 - data["left_side"]) * data["UID_right_mutation"]) > 0), dtype=np.int8)
 
-    summary_second_dilution = second_dilution(summary_first_dilution, WBC_cycles, sequencer_reads, bases_per_amplicon, error_rate)
-    summary_second_dilution.to_msgpack("second_dilution2.msg")
+    data = data.drop(columns = ["mutated_before","leftUID","rightUID","UID_left_mutation","UID_right_mutation","WBC_left_mutation","WBC_right_mutation","left_side"])
     
-    count = 0
-    count += 2 * summary_second_dilution[summary_second_dilution["mutated_before"]==1].shape[0]
-    sliced = summary_second_dilution[summary_second_dilution["mutated_before"]==0]
-    sliced_left = sliced[sliced["left_side"]==1]
-    sliced_right = sliced[sliced["left_side"]==0]
-    x = np.array(sliced_left[["WBC_left_mutation","WBC_right_mutation"]]) 
-    x[:,0] += np.array(sliced_left["UID_left_mutation"])
-    x[:,1] += np.array(sliced_left["UID_left_mutation"])
-    y = np.array(sliced_right[["WBC_left_mutation","WBC_right_mutation"]]) 
-    y[:,0] += np.array(sliced_right["UID_right_mutation"])
-    y[:,1] += np.array(sliced_right["UID_right_mutation"])    
-    count += np.sum(x > 0)
-    count += np.sum(y > 0)
+    data = pd.concat([data[data["leftWBC"]>0][["well_id","molecule_id","UID","left_mutation"]].rename(columns={"left_mutation":"mutation"}),
+                      data[data["rightWBC"]>0][["well_id","molecule_id","UID","right_mutation"]].rename(columns={"right_mutation":"mutation"})], axis=0).sort_values(["well_id","molecule_id","UID"]).reset_index(drop=True)
+    # data[:1000].to_csv("data1.csv")
 
-    print("mutated ratio:", count / sequencer_reads)
+    summary = [wells, total_molecule, mutated_count]
+    for w in range(wells):
+        aux = data[data.well_id == wells]
+        
+    end = time.time()
+    print("    one run time:", end-start)
 
-    # print(ancestor_to_kid(np.array([0,1,2,3,4,5,6,7]),0))
-    #  x = pd.DataFrame([{"a":1,"b":2},{"a":2,"b":3}])
-    #  y = pd.DataFrame([{"c":1,"d":2},{"c":2,"d":3}])
+if __name__ == '__main__':
+    UID_cycles = 15 #15 #30
+    bases_per_amplicon = 33
+    error_rate = 1e-6
+
+    total_molecule = 30 * 308 
+    mutated_count = 1
+    wells = 6 #6 #94
+    first_dilution_rate = 0.01 #0.01 #0.000185*0.01
+
+    WBC_cycles = 18 #18 #4
+    sequencer_reads = 50000000
+
+    # ["original_mutation", "n_molecule", "well_i_FC", "well_i_UID", "well_i_mutation", "well_i_UID", "well_i_mutation"]
+
+    # print("Begin simulation for:", runs, "runs with cycles:", UID_cycles, WBC_cycles)
+
+    # names = ["n_well", "n_molecule", "original_mutation"]
+    # for i in range(wells):
+    #     names.append( "well_" + str(i) + "_FC" )
+    #     names.append( "well_" + str(i) + "_UID" )
+    #     names.append( "well_" + str(i) + "_mutation" )
+    #     names.append( "well_" + str(i) + "_UID_fd" )
+    #     names.append( "well_" + str(i) + "_mutation_fd" )
+
+    one_run(UID_cycles,WBC_cycles,total_molecule,mutated_count,wells,first_dilution_rate,sequencer_reads,bases_per_amplicon,error_rate)
+
+
