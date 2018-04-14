@@ -33,7 +33,6 @@ unsigned int* translateUID(unsigned int ID, int cycles){
 // Given an order in a layer of the tree, return the transfered two WBC
 unsigned int* translateWBC(unsigned int ID, int cycles){
     unsigned int* WBCs;
-    unsigned int w1, w2;
     if(ID == 0){
         WBCs = (unsigned int*) malloc(2 * sizeof(unsigned int));
         WBCs[0] = 0;
@@ -127,7 +126,7 @@ std::vector<uint32> sampleID(int cycles, int n_samples, Random rd){
 
 void update(unsigned int* retval, int columns, int* loc,
             std::vector<uint32> ids, int cycles, int* mutation_count=NULL){
-    uint32 ID[2];
+    unsigned int* ID = (unsigned int*)malloc(2 * sizeof(unsigned int));
     if(columns == 5){
         for(int j=0; j<ids.size(); j++){
             ID = translateUID( ids[j], cycles );
@@ -147,7 +146,7 @@ void update(unsigned int* retval, int columns, int* loc,
             retval[columns * (*loc)] = ID[0];
             retval[columns * (*loc) + 1] = ID[1];
             retval[columns * (*loc) + 2] = ids[j];
-            retval[columns * loc + 3] = ( ids[j] < (1<<(cycles-1)) );                                                            
+            retval[columns * (*loc) + 3] = ( ids[j] < (1<<(cycles-1)) );                                                            
             if(mutation_count){
                 retval[columns * (*loc) + 4] += mutation_count[2 * j];
                 retval[columns * (*loc) + 5] += mutation_count[2 * j + 1];
@@ -155,6 +154,7 @@ void update(unsigned int* retval, int columns, int* loc,
             (*loc)++;       
         }
     }
+    free(ID);
     return;
 }
 
@@ -329,7 +329,7 @@ void inplace_poisson_mutation(unsigned int* retval, int rows, int columns,
                 }
                 
                 update(retval,columns,&loc, ids, cycles, mutation_count);
-                
+
                 free(mutation_count);
             }
         }
