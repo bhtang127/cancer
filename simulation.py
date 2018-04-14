@@ -87,7 +87,7 @@ def one_run(UID_cycles, WBC_cycles, total_molecule, mutated_count, wells, first_
 
     data = second_dilution(fd_data, WBC_cycles, sequencer_reads, bases_per_amplicon, error_rate)
     # print( np.sum(data["leftUID"] == data["rightUID"]) / data.shape[0] )
-    data[:1000].to_csv("data0.csv")    
+    # data[:1000].to_csv("data0.csv")    
 
     data["UID"] = data["left_side"] * data["leftUID"] + (1 - data["left_side"]) * data["rightUID"]
 
@@ -132,8 +132,8 @@ if __name__ == '__main__':
     #     names.append( "well_" + str(i) + "_UID_fd" )
     #     names.append( "well_" + str(i) + "_mutation_fd" )
 
-    # one_run(UID_cycles,WBC_cycles,total_molecule,mutated_count,wells,first_dilution_rate,sequencer_reads,bases_per_amplicon,error_rate)
+    one_run(UID_cycles,WBC_cycles,total_molecule,mutated_count,wells,first_dilution_rate,sequencer_reads,bases_per_amplicon,error_rate)
 
-    one_run(15,15,900, 1, 6, 0.01, 5000000, bases_per_amplicon, error_rate)
+    # one_run(15,15,900, 1, 6, 0.01, 5000000, bases_per_amplicon, error_rate)
 
 
