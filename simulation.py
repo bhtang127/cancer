@@ -60,7 +60,7 @@ def second_dilution(data, cycles, sequencer_reads, bases_per_amplicon, error_rat
     print("        Second dilution done")
     return data
 
-def one_run(UID_cycles, WBC_cycles, total_molecule, mutated_count, wells, first_dilution_rate, sequencer_reads, bases_per_amplicon, error_rate):
+def one_run(UID_cycles, WBC_cycles, total_molecule, mutated_count, wells, first_dilution_rate, sequencer_reads, bases_per_amplicon, error_rate, cut_ratio=0):
 
     start = time.time()
 
@@ -97,11 +97,16 @@ def one_run(UID_cycles, WBC_cycles, total_molecule, mutated_count, wells, first_
     data = pd.concat([data[data["leftWBC"]>0][["well_id","molecule_id","UID","left_mutation"]].rename(columns={"left_mutation":"mutation"}),
                       data[data["rightWBC"]>0][["well_id","molecule_id","UID","right_mutation"]].rename(columns={"right_mutation":"mutation"})], axis=0).sort_values(["well_id","molecule_id","UID"]).reset_index(drop=True)
 
-    data = data.groupby(["well_id","molecule_id","UID"])['mutation'].agg([np.mean, len])
-    data[:10000].to_csv("summary.csv")
+    if(cut_ratio == 0):
+        data = data.groupby("well_id")['mutation'].agg([np.mean,"count"])
+    else:
+        data = data.groupby(["well_id","molecule_id","UID"])['mutation'].agg([np.mean, "count"])
+        data["voted_mutate"] = np.array(data["mean"] > cut_ratio, dtype=np.int8)
+        data = data.groupby("well_id")["voted_mutate"].agg([np.mean, "count"])
         
     end = time.time()
     print("    one run time:", end-start)
+    return data
 
 if __name__ == '__main__':
     UID_cycles = 15 #15 #30
