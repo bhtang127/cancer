@@ -2,6 +2,7 @@ import random
 import numpy as np
 import matplotlib.pyplot as plt
 import sys
+import os
 import time
 import pandas as pd
 from random_methods import *
@@ -18,18 +19,18 @@ def data_init(molecule_per_well, mutated_per_well):
     print("        Data Initialized")
     return data
 
-def first_dilution(data, molecule_per_well, well, cycles, dilution_rate, bases_per_amplicon, error_rate):
+def first_dilution(data, molecule_per_well, well, c_max, p, q, dilution_rate, bases_per_amplicon, error_rate):
 
-    dilution_to = [int(molecule_per_well[i] * 2**cycles * dilution_rate) for i in range(well)]
-    nsamples_per_molecule = []
-    for i in range(well):
-        nsamples_per_molecule += list(nsamples_generator(molecule_per_well[i], dilution_to[i]))
+    # dilution_to = [int(molecule_per_well[i] * 2**cycles * dilution_rate) for i in range(well)]
+    nsamples_per_molecule, cycles = nsamples_generator(molecule_per_well, d_rate = dilution_rate, 
+                                                       c_max=c_max, p=p, q=q)
     
     indexes = expand(nsamples_per_molecule)
     data_expand = data.iloc[indexes].reset_index(drop=True)
 
     nsamples_per_molecule = np.array(nsamples_per_molecule, dtype=np.int16)
     nsamples_per_molecule = nsamples_per_molecule[nsamples_per_molecule > 0]
+    cycles = cycles[nsamples_per_molecule > 0]
     
     mutations = poisson_mutation(nsamples_per_molecule, cycles, bases_per_amplicon, error_rate, tag="UID")
 
@@ -40,15 +41,20 @@ def first_dilution(data, molecule_per_well, well, cycles, dilution_rate, bases_p
     print("        First dilution done")
     return data
 
-def second_dilution(data, cycles, sequencer_reads, bases_per_amplicon, error_rate):
+def second_dilution(data, well, c_max, p, q, sequencer_reads, bases_per_amplicon, error_rate):
 
-    n_amplicon = data.shape[0]
-    nsamples = nsamples_generator(n_amplicon, int(sequencer_reads/2), restriction=2**cycles)
+    molecule_per_well = []
+    for i in range[well]:
+        n = data[data["well_id"] == i].shape[0]
+        molecule_per_well.append(n)
+    nsamples, cycles = nsamples_generator(molecule_per_well, d_to = int(sequencer_reads/2),
+                                          c_max=c_max, p=p, q=q)
     
     indexes = expand(nsamples)
     data_expand = data.iloc[indexes].reset_index(drop=True)
     
     nsamples = nsamples[nsamples > 0]
+    cycles = cycles[nsamples > 0]
 
     mutations = poisson_mutation(nsamples, cycles, bases_per_amplicon, error_rate, tag="WBC")
 
@@ -109,32 +115,42 @@ def one_run(UID_cycles, WBC_cycles, total_molecule, mutated_count, wells, first_
     return data
 
 if __name__ == '__main__':
-    UID_cycles = 15 #15 #30
+    wells = int(sys.argv[1])
+    mutated_count = int(sys.argv[2])
+    cut_off = float(sys.argv[3])
+
     bases_per_amplicon = 33
     error_rate = 1e-6
-
     total_molecule = 30 * 308 
-    mutated_count = 1
-    wells = 6 #6 #94
-    first_dilution_rate = 0.01 #0.01 #0.000185*0.01
-
-    WBC_cycles = 18 #18 #4
     sequencer_reads = 50000000
 
-    # ["original_mutation", "n_molecule", "well_i_FC", "well_i_UID", "well_i_mutation", "well_i_UID", "well_i_mutation"]
+    if wells == 94:
+        UID_cycles = 30 
+        first_dilution_rate = 0.01*0.000185 
+        WBC_cycles = 4 
+    elif wells == 6:
+        UID_cycles = 15 
+        first_dilution_rate = 0.01 
+        WBC_cycles = 18
+    else:
+        raise(ValueError)
 
-    # print("Begin simulation for:", runs, "runs with cycles:", UID_cycles, WBC_cycles)
+    data = one_run(UID_cycles,WBC_cycles,total_molecule, mutated_count, wells,first_dilution_rate,sequencer_reads,bases_per_amplicon,error_rate,cut_off)
+    fname = "m"+str(mutated_count)+"w"+str(wells)+"c"+str(cut_off)+".csv"
 
-    # names = ["n_well", "n_molecule", "original_mutation"]
-    # for i in range(wells):
-    #     names.append( "well_" + str(i) + "_FC" )
-    #     names.append( "well_" + str(i) + "_UID" )
-    #     names.append( "well_" + str(i) + "_mutation" )
-    #     names.append( "well_" + str(i) + "_UID_fd" )
-    #     names.append( "well_" + str(i) + "_mutation_fd" )
+    if not os.path.isfile(fname):
+        data.to_csv(fname, mode='a')
+    else:
+        data.to_csv(fname, mode='a', header=False)
 
-    one_run(UID_cycles,WBC_cycles,total_molecule,mutated_count,wells,first_dilution_rate,sequencer_reads,bases_per_amplicon,error_rate)
 
-    # one_run(15,15,900, 1, 6, 0.01, 5000000, bases_per_amplicon, error_rate)
 
+    # data = one_run(UID_cycles,WBC_cycles,total_molecule, 0, wells,first_dilution_rate,sequencer_reads,bases_per_amplicon,error_rate,0.9)
+    # data.to_csv("m0w94c09.csv")
+
+    # data = []
+    # for i in range(10):
+    #     data.append( one_run(15,18,total_molecule, 0, 6, 0.01,sequencer_reads,bases_per_amplicon,error_rate) )
+    # data = pd.concat(data, axis=0)
+    # data.to_csv("m0w6c0.csv")
 

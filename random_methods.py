@@ -15,10 +15,33 @@ def expand(n_samples):
 
     return indexes
 
-def nsamples_generator(counts, total_samples, restriction=0):
-    samples = np.zeros(counts, dtype=np.int32)
-    fm.inplace_sampling(samples, total_samples, restriction)
-    return samples
+def nsamples_generator(molecules, d_rate = -1, d_to = -1, c_max, p, q):
+    cycles_group = []
+    samples = []
+    cycles = []
+
+    for n in molecules:
+        cycles_group += np.random.binomial(c_max, p, n) * np.random.binomial(1, q, 1)
+    
+    if d_rate >= 0:
+        nsample_per_well = [ int(np.sum( 2**x ) * d_rate) for x in cycles_group ]
+        for i in range(len(molecules)):
+            samples_i = np.zeros(molecules[i], dtype=np.int32)
+            fm.inplace_sampling(samples_i, cycles_group[i], nsample_per_well[i])
+            samples += list(samples_i)
+            cycles += list(cycles_group[i])
+
+    else:
+        samples = np.zeros( np.sum(molecules), dtype=np.int32 )
+        for i in range(len(molecules)):
+            cycles += list(cycles_group[i])
+        max_mol = 2 ** np.asarray(cycles)
+        if np.sum(max_mol) <= d_to:
+            samples = max_mol
+        else:
+            fm.inplace_sampling(samples, cycles, d_to)
+
+    return samples, cycles
 
 def poisson_mutation(nsamples_per_molecule, cycles, bases_per_amplicon, error_rate, tag):
     rows = np.sum(nsamples_per_molecule)

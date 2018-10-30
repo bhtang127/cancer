@@ -159,19 +159,22 @@ void update(unsigned int* retval, int columns, int* loc,
 }
 
 void inplace_poisson_mutation(unsigned int* retval, int rows, int columns,
-                              unsigned int* nsamples_per_molecule, int n_molecule, int cycles, 
+                              unsigned int* nsamples_per_molecule, int n_molecule, int* cycles, int l,  
                               int bases_per_amplicon, double error_rate){
 
 
-    unsigned int aid1, aid2, *ID, ns_max = 0;
+    unsigned int aid1, aid2, *ID, ns_max = 0, c_max = 0;
     for(int i=0; i < n_molecule; ++i){
         if(nsamples_per_molecule[i] > ns_max){
             ns_max = nsamples_per_molecule[i];
         }
+        if(cycles[i] > c_max){
+            c_max = cycles[i];
+        }
     }
 
     int total_mutation_counts = 0;
-    double control_mean = ns_max * (cycles-floor(log2(ns_max))+2) * bases_per_amplicon * error_rate;
+    double control_mean = ns_max * (c_max-floor(log2(ns_max))+2) * bases_per_amplicon * error_rate;
     double true_mean;
     int cut_off = 0, ns, randnum, choice, aux, *mutation_count, layer, index, ancsum=0;
     double zero_control_mean;
@@ -198,19 +201,20 @@ void inplace_poisson_mutation(unsigned int* retval, int rows, int columns,
 
     for(int i=0,loc=0; i<n_molecule; i++){
         ns = nsamples_per_molecule[i];
+        cyc = cycles[i];
         if(i % (n_molecule/10) == 0){
             std::cout<<"Processing: "<<i*100.0/n_molecule<<"%"<<std::endl;
         }
-        zero_control_mean = ns * (cycles-floor(log2(ns))+2) * bases_per_amplicon * error_rate;
+        zero_control_mean = ns * (cyc-floor(log2(ns))+2) * bases_per_amplicon * error_rate;
         control_pval[0] = poisson_pmf(0, zero_control_mean); 
         control_pval[1] = 1 - control_pval[0];
         if(rd.Choice(control_pval) == 0){
-            ids = sampleID(cycles, ns, rd);
-            update(retval, columns, &loc, ids, cycles);
+            ids = sampleID(cyc, ns, rd);
+            update(retval, columns, &loc, ids, cyc);
         }
         else{
-            ids = sampleID(cycles, ns, rd);
-            ancestors = find_all_ancestors(ids, cycles);
+            ids = sampleID(cyc, ns, rd);
+            ancestors = find_all_ancestors(ids, cyc);
             ancsum = 0;
             for(int k=0; k < ancestors.size(); k++){
                 ancsum += ancestors[k].size();
@@ -237,7 +241,7 @@ void inplace_poisson_mutation(unsigned int* retval, int rows, int columns,
             // std::cout << std::endl;
             randnum = rd.Choice(adjust_pval);
             if(randnum == 0){
-                update(retval,columns,&loc, ids, cycles);
+                update(retval,columns,&loc, ids, cyc);
             }
             else{
                 total_mutation_counts += randnum;
@@ -270,7 +274,7 @@ void inplace_poisson_mutation(unsigned int* retval, int rows, int columns,
                     mutation_loc[k].push_back(layers[k]);
                     mutation_loc[k].push_back(1);
                 }
-                for(int k=0; k < cycles; k++){
+                for(int k=0; k < cyc; k++){
                     mutation_loc_aux.clear();
                     mutation_loc_aux.resize(randnum * ns);
                     aux = 0;
@@ -328,7 +332,7 @@ void inplace_poisson_mutation(unsigned int* retval, int rows, int columns,
                     }
                 }
                 
-                update(retval,columns,&loc, ids, cycles, mutation_count);
+                update(retval,columns,&loc, ids, cyc, mutation_count);
 
                 free(mutation_count);
             }
@@ -340,14 +344,18 @@ void inplace_poisson_mutation(unsigned int* retval, int rows, int columns,
 
 
 // Utility functions
-void inplace_sampling(int* samples, int len, int total_samples, int restriction){
+void inplace_sampling(int* samples, int len, int* cycles, int l, int total_samples){
     std::random_device rd;
     std::mt19937 mt(rd());
-    std::uniform_int_distribution<int> dist(0, len-1);
+    std::vector<long> pval(l);
+    for(int i=0; i < l; i++){
+        pval[i] = 1 >> (cycles[i]);
+    }
+    std::uniform_int_distribution<long> dist(pval);
     int cumm = 0, randi;
     while(cumm < total_samples){
         randi = dist(mt);
-        if(restriction != 0 && samples[randi] > restriction) continue;
+        if(samples[randi] > (1>>(cycles[randi]))) continue;
         else{
             samples[randi]++;
             cumm++;
