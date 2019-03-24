@@ -1,0 +1,72 @@
+---
+title: "Test of Peto Cancer Data"
+author: "Bohao Tang"
+date: "November 18, 2018"
+output: html_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+## A Demo for test of cancer
+
+```{r, message=FALSE}
+library(tidyverse)
+
+### Visualizing Peto Data in log scale
+PetoBJC = read_csv("PetoBJC2000.csv")
+PetoBJC %>% gather(Expose, CR, -Age) %>%
+            filter(Age > 50) %>%
+            ggplot(aes(x=Age, y=CR, col=Expose)) +
+            geom_line() +
+            scale_x_log10() + scale_y_log10() +
+            ylab("Cumulative Risk")+ggtitle("log-log plot")
+
+### This is a plot for only CR being in log scale
+### Where a straight line suggest a exponetial law
+PetoBJC %>% gather(Expose, CR, -Age) %>%
+            filter(Age > 50) %>%
+            ggplot(aes(x=Age, y=CR, col=Expose)) +
+            geom_line() + scale_y_log10() +
+            ylab("Cumulative Risk") + ggtitle("log-one plot")
+
+### You see the log-log plot is highly close to a class of constant slope lines
+### might be better than that of one-log plot
+### which means original Cumulative risk to Age is like a polynomial (slightly more than a exponential)
+
+
+### Test for polynomial (kick out Non-smokers, or you can include Non-smokers but cut Age >= 55)
+
+PetoTest = PetoBJC %>% 
+           gather(Expose, CR, -Age) %>%
+           filter(Age > 45 & Expose != "Non_smokers") %>%
+           mutate(log.Age = log(Age), log.CR = log(CR))
+
+m30=lm(formula = log.CR~log.Age, data = PetoTest %>% filter(Expose=="Stopped_30"));summary(m30)
+m40=lm(formula = log.CR~log.Age, data = PetoTest %>% filter(Expose=="Stopped_40"))
+m50=lm(formula = log.CR~log.Age, data = PetoTest %>% filter(Expose=="Stopped_50"));summary(m50)
+m60=lm(formula = log.CR~log.Age, data = PetoTest %>% filter(Expose=="Stopped_60"))
+mcs=lm(formula = log.CR~log.Age, data = PetoTest %>% filter(Expose=="Continuing_smokers"));summary(mcs)
+
+### You can see the slopes are close and all significant with the Rsquare quite large
+### which means straight line is a perfect fit for the data
+### Therefore the power law do not have evidence to be wrong compare with constancy
+```
+
+
+```{r}
+### Here is a test in a "most rigorous" way, which test if the power of the polynomial is equal if every expose follow the power law.
+### For the test data, we can see we can't pass the test
+lm.full = lm(log.CR ~ Expose + Expose:log.Age, PetoTest)
+lm.constant = lm(log.CR ~ Expose + log.Age, PetoTest)
+compare = anova(lm.constant,lm.full)
+compare
+
+### For the test data kick out continuing smokers, we can see we can't pass the test
+### this is slightly better for p-value of 0.05 but still can't pass the test
+lm.full = lm(log.CR ~ Expose + Expose:log.Age, PetoTest%>%filter(Expose!="Continuing_smokers"))
+lm.constant = lm(log.CR ~ Expose + log.Age, PetoTest%>%filter(Expose!="Continuing_smokers"))
+compare = anova(lm.constant,lm.full)
+compare
+```

@@ -1,0 +1,204 @@
+---
+title: "Power Law"
+author: "Bohao Tang"
+date: "2018/10/30"
+output: html_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+## Data
+
+The data here are from `Table 2` in Stoffel and `Figure 2` in Peto_NEJM. (`Figure 3` in Peto_BJC do not have data points with it and `Table 3` in Fuchs do not have age-specific incidences)
+
+Here we show the data, where `Ages`, `Gender`, `Expose` are as the name and `Type` is type of cancer, `CR` is the cumulative risk (in %). If the age-specific instances are in constant ratio between different expose than cumulative risk should remain the same ratio.
+```{r show, message=F}
+library(tidyverse)
+
+Peto_NEJM = read_csv("Peto_NEJM.csv")
+Stoffel = read_csv("Stoffel.csv")
+
+Peto_NEJM = Peto_NEJM %>% gather(Ages, CR, -c(Gender, Expose))
+Stoffel = Stoffel %>% gather(Ages, CR, -c(Gender, Expose, Type))
+
+Peto_NEJM
+
+Stoffel
+```
+
+## Plots
+
+Here we do some plots to show how far is the data from constant ratio
+
+```{r plot, message=FALSE}
+## For Peto data
+
+Peto_NEJM %>% spread(Expose, CR) %>% mutate(ratio=N/S, Ages=as.numeric(Ages)) %>%
+              ggplot(aes(x=Ages, y=ratio, color=Gender)) +
+              geom_line() + geom_point() +
+              xlab("Ages") + ylab("CR ratio of non smoking to smoking") +
+              ggtitle("Ratio Plot")
+
+
+## For Stoffel data
+
+st = Stoffel %>% spread(Expose, CR) %>% mutate(Ages=as.numeric(Ages))
+st$'MLH1_POP' = st$MLH1 / st$POP
+st$'MMR_POP' = st$MMR / st$POP
+st$'MSH2_POP' = st$MSH2 / st$POP
+st$'MLH1_MMR' = st$MLH1 / st$MMR
+st$'MMR_MSH2' = st$MMR / st$MSH2
+
+st %>% ggplot() +
+       facet_wrap(Gender ~ Type, scales = "free") +
+       geom_line(aes(x = Ages, y = MLH1_POP)) +
+       ggtitle("MLH1 carrier vs Population in Cumulative Risk")
+       
+st %>% ggplot() +
+       facet_wrap(Gender ~ Type, scales = "free") +
+       geom_line(aes(x = Ages, y = MMR_POP)) +
+       ggtitle("MMR carrier vs Population in Cumulative Risk")
+
+st %>% ggplot() +
+       facet_wrap(Gender ~ Type, scales = "free") +
+       geom_line(aes(x = Ages, y = MSH2_POP)) +
+       ggtitle("MSH2 carrier vs Population in Cumulative Risk")
+
+st %>% ggplot() +
+       facet_wrap(Gender ~ Type, scales = "free") +
+       geom_line(aes(x = Ages, y = MLH1_MMR)) +
+       ggtitle("MLH1 carrier vs MMR carrier in Cumulative Risk")
+
+st %>% ggplot() +
+       facet_wrap(Gender ~ Type, scales = "free") +
+       geom_line(aes(x = Ages, y = MMR_MSH2)) +
+       ggtitle("MMR carrier vs MSH2 carrier in Cumulative Risk")
+```
+
+From the graph you can see the ratios are not very constant in `expose vs non-expose`. But it might be a good constant between different exposes.
+
+## Test
+
+Here we do statistical test for the constant ratio hypothesis. We have two ways for doing this. One is fitting the model $Y = \beta X$ and do goodness-of-fit test, and the other is to test if $\log Y_{i+1} - \log Y_i$ is equal to $\log X_{i+1} -\log X_i$ in pairs. Here's we use the latter one.
+
+```{r test, message=F}
+
+ratio.test <- function(X, Y){
+    X.ratio = c()
+    Y.ratio = c()
+    n = length(X)
+    for(i in 1:(n-1)) {
+        X.ratio = c(X.ratio, log(X[i+1] / X[i]))
+        Y.ratio = c(Y.ratio, log(Y[i+1] / Y[i]))
+    }
+    t.test(X.ratio, Y.ratio, paired = T)
+}
+
+### Peto data for Male
+X = filter(Peto_NEJM, Gender=="M", Expose == "N") %>% arrange(Ages)
+X = X$CR
+
+Y = filter(Peto_NEJM, Gender=="M", Expose == "S") %>% arrange(Ages)
+Y = Y$CR
+
+##### Smoke vs Non smoke for Male
+ratio.test(X, Y)
+
+### Peto data for Female
+X = filter(Peto_NEJM, Gender=="F", Expose == "N") %>% arrange(Ages)
+X = X$CR
+
+Y = filter(Peto_NEJM, Gender=="F", Expose == "S") %>% arrange(Ages)
+Y = Y$CR
+
+##### Smoke vs Non smoke for female
+ratio.test(X, Y)
+
+### Stoffel data for Male: P value table
+Stoffel.M = filter(Stoffel, Gender=="M")
+Exposes = unique(Stoffel.M$Expose)
+n = length(Exposes)
+p_table = matrix(0, n, n)
+rownames(p_table) = Exposes
+colnames(p_table) = Exposes
+
+for(u in Exposes) {
+    for(v in Exposes) {
+        X = Stoffel.M %>% filter(Expose == u)
+        X = X$CR
+        Y = Stoffel.M %>% filter(Expose == v)
+        Y = Y$CR
+        p_table[u, v] = ratio.test(X, Y)$p.value
+    }
+}
+
+##### Male Colorectal
+print(p_table)
+
+### Stoffel data for Female Colorectal: P value table
+Stoffel.F = filter(Stoffel, Gender=="F", Type=="Colorectal")
+Exposes = unique(Stoffel.F$Expose)
+n = length(Exposes)
+p_table = matrix(0, n, n)
+rownames(p_table) = Exposes
+colnames(p_table) = Exposes
+
+for(u in Exposes) {
+    for(v in Exposes) {
+        X = Stoffel.F %>% filter(Expose == u)
+        X = X$CR
+        Y = Stoffel.F %>% filter(Expose == v)
+        Y = Y$CR
+        p_table[u, v] = ratio.test(X, Y)$p.value
+    }
+}
+
+##### Female Colorectal
+print(p_table)
+
+### Stoffel data for Female Endometrial: P value table
+Stoffel.F = filter(Stoffel, Gender=="F", Type=="Endometrial")
+Exposes = unique(Stoffel.F$Expose)
+n = length(Exposes)
+p_table = matrix(0, n, n)
+rownames(p_table) = Exposes
+colnames(p_table) = Exposes
+
+for(u in Exposes) {
+    for(v in Exposes) {
+        X = Stoffel.F %>% filter(Expose == u)
+        X = X$CR
+        Y = Stoffel.F %>% filter(Expose == v)
+        Y = Y$CR
+        p_table[u, v] = ratio.test(X, Y)$p.value
+    }
+}
+
+##### Female Endometrial
+print(p_table)
+
+### Stoffel data for Female Colorectal_or_Endometria: P value table
+Stoffel.F = filter(Stoffel, Gender=="F", Type=="Colorectal_or_Endometrial")
+Exposes = unique(Stoffel.F$Expose)
+n = length(Exposes)
+p_table = matrix(0, n, n)
+rownames(p_table) = Exposes
+colnames(p_table) = Exposes
+
+for(u in Exposes) {
+    for(v in Exposes) {
+        X = Stoffel.F %>% filter(Expose == u)
+        X = X$CR
+        Y = Stoffel.F %>% filter(Expose == v)
+        Y = Y$CR
+        p_table[u, v] = ratio.test(X, Y)$p.value
+    }
+}
+
+##### Female Colorectal_or_Endometria
+print(p_table)
+```
+
+You can see from here ratio for Male is quite constant in Peto data and in Stoffel data among different exposes (except population). But for female the ratio is quite not constant.
