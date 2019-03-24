@@ -1,0 +1,38 @@
+---
+title: "simulation"
+output: html_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+## Data
+
+```{r, warning=FALSE,message=FALSE}
+library(tidyverse)
+
+result = read_csv("result.csv", col_types = cols(HitType1=col_character()))
+str(result)
+```
+
+```{r hist}
+cancer_prob = c()
+ts = seq(0,4160,length.out = 1000)
+for(t in ts){
+  prob = mean(result$ExitTime < (4160-t))
+  cancer_prob = c(cancer_prob, prob)
+}
+
+plot(ts/52, cancer_prob)
+
+hist(result$HitTime1/52)
+```
+
+```{r prob}
+table(result$HitType1)
+table(result$HitType2)
+table((result %>% filter(HitType2=="F"))$HitType3)
+table((result %>% filter(HitType2=="S"))$HitType3)
+table((result %>% filter(HitType2=="M"))$HitType3)
+```
