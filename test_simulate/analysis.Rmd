@@ -36,3 +36,17 @@ table((result %>% filter(HitType2=="F"))$HitType3)
 table((result %>% filter(HitType2=="S"))$HitType3)
 table((result %>% filter(HitType2=="M"))$HitType3)
 ```
+
+```{r gamma}
+m = mean(result$HitTime1, na.rm = TRUE)
+v = var(result$HitTime1, na.rm = TRUE)
+
+beta = m / v
+alpha = m^2 / v
+
+print(c(alpha, beta))
+
+par(mfrow=c(1,2))
+hist(result$HitTime1)
+hist(rgamma(2500, alpha, beta))
+```
