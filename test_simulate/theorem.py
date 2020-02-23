@@ -1,5 +1,6 @@
 import numpy as np
 import matplotlib.pyplot as plt
+from testApprox import testApprox
 
 class GeneType():
     
@@ -27,7 +28,8 @@ class GeneType():
                 r_before = (alpha["psym"]-alpha["dsym"])*alpha["division"]-alpha["death"]
                 
                 alpha["psym"] += alpha["dp"]
-                alpha["pasym"] -= alpha["dp"]
+                alpha["dsym"] -= alpha["dp"]
+#                 alpha["pasym"] -= alpha["dp"]
                 
                 r_after = (alpha["psym"]-alpha["dsym"])*alpha["division"]-alpha["death"]
                 
@@ -119,15 +121,7 @@ class tissue():
                         )
         print("Excess Survival ratio:", self.excess_survive_rate/(self.para["r"]/self.para["b"]))
         print("P(mutiation in [0,tao]):", self.mutation_before_epsK)
-#         init_T = growth(self.alpha).get_init_time()
-        
-#         print("Approximation Consistency: ", 
-#               1-np.exp(-self.para["r"]*self.eps*self.para["K"]*\
-#                        np.exp(-self.para["r"]*init_T)/self.para["b"]))
-        
-#         print("Init time to grow to size eps*K: {0:.2f} years".format(init_T/52))
-#         self.T = self.T - growth(self.alpha).get_init_time()
-#         self.ts = np.linspace(0, self.T, num=self.period)
+        testApprox(self.eps*self.para["K"], self.para["r"], self.para["b"])
     
     def density(self, ts, para):
         e_rGt = np.exp(-para["r"]*ts)
